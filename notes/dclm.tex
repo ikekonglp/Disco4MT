@@ -164,7 +164,7 @@ If we want to maintain fully document-level context on the target side, the prop
 + \log P(\vw_i^{(k)} \mid \vh_{i-1}^{(\ell)})}\\
 q^{(k)}_i \propto & \exp (\psi^{(k)}_i),
 \end{align}
-with $\bigoplus_q$ serving as a general notation, which could indicate a max operation, random sampling, or perhaps even some kind of weighted average.
+with $\bigoplus_q$ serving as a general notation, which could indicate a max operation, random sampling, or perhaps even some kind of weighted average. We can use any sequential Monte Carlo or beam search algorithm, for example resampling at each time step, or taking the top $K$ hypotheses. In principle we could also run this process in the backwards direction and then add both scores into the MERT decoder; or we could use something like Forward Filtering Backward Sampling (FFBS), which is a two-pass sequential Monte Carlo algorithm that would draw samples from the joint distribution $P(\vwt_{1:N} \mid \vws)$.
 
 \bibliographystyle{acl}
 \bibliography{bib}
