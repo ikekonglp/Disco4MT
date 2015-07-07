@@ -1,0 +1,56 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{acl2015}
+\usepackage{times,booktabs}
+\usepackage{bm,amsmath,url,graphicx}
+\makeatletter
+\newcommand{\@BIBLABEL}{\@emptybiblabel}
+\newcommand{\@emptybiblabel}[1]{}
+\makeatother
+\usepackage[draft,hidelinks]{hyperref}
+\setlength\titlebox{6.5cm}    % Expanding the titlebox
+
+\title{Document-Context Language Models}
+\author{Jacob Eisenstein}
+
+\newcommand{\trans}[1]{#1^{\top}}
+\renewcommand{\vec}[1]{\mathbf{#1}}
+\newcommand{\vs}[0]{\vec{s}}
+\newcommand{\vh}[0]{\vec{h}}
+\newcommand{\vw}[0]{\vec{w}}
+\newcommand{\va}[0]{\vec{w}}
+\newcommand{\tuple}[1]{\langle #1 \rangle}
+\newcommand{\mat}[1]{\bm{#1}}
+
+
+\usepackage{enumitem}
+
+\begin{document}
+\maketitle
+
+In the RNN language model of \newcite{mikolov2010recurrent}, we have
+\begin{align}
+\vec{s}_n \leftarrow & f(\vec{1}_{w_n}, \vs_{n-1})\\
+w_{n+1} \sim & \text{SoftMax}(\mat{V} \vec{s}_n),
+\end{align}
+where $f(\vec{1}_{w_n}, \vs_{n-1}) = \sigma(\mat{U} \trans{[\trans{\vec{1}}_{w_n}, \trans{\vec{s}}_{n-1}]})$; fancier RNNs such as LSTM and GRU use more complex gating systems in this function, but the basic idea is the same. 
+
+We can extend this model to incorporate a document-context vector $\vh_{i-1}$, by specifying 
+\begin{align}
+w_{n+1} \sim & \text{SoftMax}(\mat{V}_s \vec{s}_n + \mat{V}_d \vh_{i-1}),
+\end{align}
+where the vector $\vh_{i-1}$ summarizes the document context at sentence $i-1$. There are several options for computing this vector, but it should depend on (a) the words in the sentence $\vw_{i-1}$, and (b) the previous document context $\vh_{i-2}$. Therefore, we propose another RNN-style model,
+\begin{align}
+\va_i \leftarrow & g(\vw_i) \\
+\vh_i \leftarrow & f(\va_i, \vh_{i-1}),
+\end{align}
+where the function $f$ again defines an RNN, LSTM, GRU, etc. The function $g(\dot)$ might indicate a convolutional neural network, or could also indicate some kind of left-to-right structure. 
+
+The first key empirical question (helpfully raised by Lingpeng) is whether this model is any better than the original RNN, or a sentence  sentence-sensitive ver
+
+Having established the basic DCLM framework, let's now consider some extensions, before 
+
+\bibliographystyle{acl}
+\bibliography{bib}
+
+
+\end{document}
