@@ -9,7 +9,7 @@
 \usepackage[draft,hidelinks]{hyperref}
 \setlength\titlebox{6.5cm}    % Expanding the titlebox
 
-\title{Document-Context Language Models}
+\title{The Document Context Language Model}
 \author{Jacob Eisenstein}
 
 \newcommand{\trans}[1]{#1^{\top}}
@@ -17,37 +17,154 @@
 \newcommand{\vs}[0]{\vec{s}}
 \newcommand{\vh}[0]{\vec{h}}
 \newcommand{\vw}[0]{\vec{w}}
-\newcommand{\va}[0]{\vec{w}}
+\newcommand{\vwt}[0]{\vw^{(t)}}
+\newcommand{\vws}[0]{\vw^{(s)}}
+\newcommand{\wt}[0]{w^{(t)}}
+\newcommand{\ws}[0]{w^{(s)}}
+\newcommand{\va}[0]{\vec{a}}
+\newcommand{\vat}[0]{\vec{a}^{(t)}}
+\newcommand{\vas}[0]{\vec{a}^{(s)}}
+\newcommand{\vb}[0]{\vec{b}}
 \newcommand{\tuple}[1]{\langle #1 \rangle}
 \newcommand{\mat}[1]{\bm{#1}}
-
+\newcommand{\set}[1]{\mathcal{#1}}
 
 \usepackage{enumitem}
 
 \begin{document}
 \maketitle
 
+\section{Basic Model}
+
 In the RNN language model of \newcite{mikolov2010recurrent}, we have
 \begin{align}
-\vec{s}_n \leftarrow & f(\vec{1}_{w_n}, \vs_{n-1})\\
-w_{n+1} \sim & \text{SoftMax}(\mat{V} \vec{s}_n),
+\va_n \leftarrow & f(\vec{1}_{w_n}, \va_{n-1})\\
+w_{n+1} \sim & \text{SoftMax}(\mat{V} \va_n),
 \end{align}
-where $f(\vec{1}_{w_n}, \vs_{n-1}) = \sigma(\mat{U} \trans{[\trans{\vec{1}}_{w_n}, \trans{\vec{s}}_{n-1}]})$; fancier RNNs such as LSTM and GRU use more complex gating systems in this function, but the basic idea is the same. 
+where $f(\vec{1}_{w_n}, \va_{n-1}) = \sigma(\mat{U} \trans{[\trans{\vec{1}}_{w_n}, \trans{\va}_{n-1}]})$; fancier RNNs such as LSTM and GRU use more complex gating systems in this function, but the basic idea is the same. 
 
-We can extend this model to incorporate a document-context vector $\vh_{i-1}$, by specifying 
+We can extend this model to incorporate a document context vector $\vh_{i-1}$, by specifying 
 \begin{align}
-w_{n+1} \sim & \text{SoftMax}(\mat{V}_s \vec{s}_n + \mat{V}_d \vh_{i-1}),
+w_{i,n+1} \sim & \text{SoftMax}(\mat{V}_s \va_{i,n} + \mat{V}_d \vh_{i-1}),
 \end{align}
 where the vector $\vh_{i-1}$ summarizes the document context at sentence $i-1$. There are several options for computing this vector, but it should depend on (a) the words in the sentence $\vw_{i-1}$, and (b) the previous document context $\vh_{i-2}$. Therefore, we propose another RNN-style model,
 \begin{align}
-\va_i \leftarrow & g(\vw_i) \\
-\vh_i \leftarrow & f(\va_i, \vh_{i-1}),
+\vb_i \leftarrow & g(\vw_i) \\
+\vh_i \leftarrow & f(\vb_i, \vh_{i-1}),
 \end{align}
-where the function $f$ again defines an RNN, LSTM, GRU, etc. The function $g(\dot)$ might indicate a convolutional neural network, or could also indicate some kind of left-to-right structure. 
+where the function $f$ again defines an RNN, LSTM, GRU, etc. The function $g(\dot)$ might indicate a convolutional neural network, or could also indicate some kind of left-to-right structure. We can train the model on cross-entropy of the predictions $w_{n+1}$, or on a noise-contrastive estimation objective.
 
-The first key empirical question (helpfully raised by Lingpeng) is whether this model is any better than the original RNN, or a sentence  sentence-sensitive ver
+\begin{table}
+  \centering
+  \small
+  \begin{tabular}{lp{2in}}
+    \toprule
+    $w_{in}$ & word $n$ in sentence $i$ \\
+    $\vec{1}_{w_{in}}$ & indicator vector for $w_{in}$ \\
+    $\va_{in}$ & RNNLM latent state at word $n$ in sentence $i$\\
+    $f(\dot)$ & RNN recurrence function \\
+    $\vb_i$ & vector representation of sentence $i$ \\
+    $g(\dot)$ & representation function for sentence $i$\\
+    $\vh_i$ & DCLM latent state at sentence $i$\\
+    $\tuple{\vws_i, \vwt_i}$ & source-target bitext instance $i$ (usually corresponding to a sentence in the source language)\\
+    $d_i$ & discourse relation between sentence $i$ and its predecessor\\
+\bottomrule
+  \end{tabular}
+  \caption{Table of notation}
+  \label{tab:notation}
+\end{table}
 
-Having established the basic DCLM framework, let's now consider some extensions, before 
+The first key empirical question (helpfully raised by Lingpeng) is to compare:
+\begin{itemize}
+\item The DCLM model as defined here
+\item The original RNNLM
+\item A sentence-sensitive version of the RNNLM, where we condition $w_{n+1}$ the latent state $\vs_n$ as well as the latent states $\vs_{n'}$ and $\vs_{n''}$, with $n$ and $n''$ indexing the end of the previous two sentences.
+\end{itemize}
+
+We will perform perplexity evaluations, beginning with the PTB evaluation from~\newcite{mikolov2010recurrent}.
+
+\section{Extensions}
+Having established the basic DCLM framework, we now consider some extensions that may make it more relevant to both discourse and machine translation.
+
+\subsection{Bilingual DCLM}
+Suppose we have some aligned sentences, $\{\tuple{\vwt_i, \vws_i}\}_{i\in 1\ldots N}$. We can train a bilingual DCLM, in which we use the latent state on $\vws$ to predict the words in $\vwt$. Specifically, we have,
+\begin{align}
+\vat_{i,n} \leftarrow & f(\vec{1}_{\wt_{i,n}},\vat_{i,n-1}) \\
+\vh_{i,n} \leftarrow & f(g(\vws_i), \vh_{i-1}) \\
+\wt_{i,n} \sim & \text{SoftMax}(\mat{V}_s \vat_{i,n}
++ \mat{V}_d \vh_{i-1}).
+\end{align}
+We keep a local RNNLM for the target language, but also include the source-side document context vector $\vh_{i-1}$. We may also train want to train this model on source-language text, as described in the basic DCLM. A key advantage of this model is that it brings in document-level information without requiring document-level decoding: all the document level information is extracted from the source side. The score $\mat{V}_s \vat_{i,n} + \mat{V}_d \vh_{i-1}$ can simply be handed off to a decoder, which might involve more complex translation components.
+
+\subsection{Discourse}
+Suppose we have discourse annotations $d_{i} \in \set{D}$, which might come from the Penn Discourse Treebank. We can use these as an additional source of supervision, in several different ways.
+
+\paragraph{Discourse-based projection}
+We can use the discourse relations to transform the representation of the previous sentence $\vh_{i-1}$,
+\begin{align}
+w_{i,n+1} \sim & \text{SoftMax}(\mat{V}_s \va_{i,n} + \mat{V}_d \tanh(\mat{R}_{d_i} \vh_{i-1})),
+\end{align}
+where $\mat{R}_{d_i}$ is a $K\times K$ matrix. At decoding time, we can run a discourse relation classifier to obtain $\hat{d}_i$; we should probably train on these predicted discourse relations too. This captures the idea that discourse relations determine how the document context affects the words that are generated.
+
+\paragraph{Discourse-based recurrence}
+We can apply a similar idea at the RNN level, so that 
+\begin{align}
+\vh_i \leftarrow & f(\vb_i, \tanh(\mat{R}_{d_i} \vh_{i-1})).
+\end{align}
+Here, the role of discourse is to shape the evolution of meaning through the document. It's hard to have intuitions about whether this would work better than applying the discourse-driven transformation directly before generating the next word, but it would be easy to try. Since we have PDTB annotations on the same data used in the Mikolov RNNLM, we can compare gold-standard relations to predictions from our system.
+
+\paragraph{Discourse as an auxiliary task}
+Finally, we may treat discourse relation prediction as an auxiliary task, on the hope that discourse-informed vectors $\vh$ will also be more useful for translation or word prediction. Specifically, we can add something like,
+\begin{align}
+d_i \sim & \text{SoftMax}(\trans{\vh_{i}}\mat{\Theta} \vh_{i-1}),
+\end{align}
+or
+\begin{align}
+d_i \sim & \text{MLP}([\trans{\vh}_{i}, \trans{\vh}_{i-1}]),
+\end{align}
+where $\text{MLP}$ indicates a multilayer perceptron. In this case, it's a little harder to see how to incorporate discourse at decoding time, but maybe the document context vectors $\vh$ will just be better thanks to this auxiliary task. (In the previous document I talked about a ``retrofitting'' idea, but that seems too complicated to worry about now.)
+
+\subsection{Other context}
+While a left-to-right order matches human reading, nothing in the model requires this order for decoding. We can easily do:
+\begin{align}
+w_{i,n+1} \sim & \text{SoftMax}(\mat{V}_s \va_{i,n} + \mat{V}_{d,\ell} \vh_{i-1} + \mat{V}_{d,r} \vh_{i+1}).
+\end{align}
+
+This works for either the monolingual or bilingual models. 
+
+We can also employ rhetorical structure theory. Assume sentence $i$ is the satellite of sentence $\Gamma(i)$. Then we can extend the model further, to,
+\begin{align}
+\notag
+w_{i,n+1} \sim \text{SoftMax}(& \mat{V}_s \va_{i,n} + \mat{V}_{d,\ell} \vh_{i-1}\\
+&  + \mat{V}_{d,r} \vh_{i+1} + \mat{V}_{rst} \vh_{\Gamma(i)}).
+\end{align}
+
+\section{Decoding}
+The bilingual model does not require any change to the decoding algorithm: we just hand off the scoring function to MERT or whatever. The hope is that the document context obtained by this model will help focus the language model on the target side, potentially getting correct tense or definiteness information from previous sentences.
+
+However, the bilingual model does not ensure that the target translation is discourse coherent. For this, we need to condition $\vwt_i$ on an $\vh_{i-1}$ that is computed on the target side. Recall that $\vh_{i-1}$ is computed recursively from $\vw_{i-1}$ and $\vh_{i-2}$; it therefore summarizes the state of the target side translation up to sentence $i-1$. The score contributed by $\vw_i$ is equal to,
+\begin{equation}
+\sum_n \log P(w_{i,n} \mid w_{i,1:n-1}, \vh_{i-1}),
+\end{equation}
+which can be computed by the feedforward network. We would like to choose the document-level translation with the best global score, $\sum_i \sum_n \log P(w_{i,n} \mid w_{i,1:n-1}, \vh_{i-1})$, but this will not be possible in the general case. There are two possible simplifications.
+
+\subsection{Viterbi decoding}
+If we decouple the target-side document context vector $\vh_i$ from $\vh_{i-1}$, then things become considerably simpler. We now compute $\vh_{i-1} = g(\vw_{i-1})$, where $g(\dot)$ can be either a convolutional or recurrent network. Now imagine we can enumerate all possible translations of sentence $i$, reusing the superscript now to index the translation $k$, $\vw_i^{(k)}$. Then the score of the best translation $\vw_{1:i}$ is given by,
+\begin{align}
+\psi_i = & \max_k \psi_i^{(k)}\\
+\psi_i^{(k)} = & \max_{\ell} \log P(\vw_i^{(k)} \mid \vw_{i-1}^{(\ell)}) + \psi_{i-1}^{(\ell)},
+\end{align}
+which is the familiar Viterbi recurrence. We can thus decode exactly in this case (assuming an infinite number of translation hypotheses at each sentence), and can still combine with the bilingual model to incorporate fully document-level context from the source side. In practice, we will need $k$-best lists from the per-sentence translator, and may wish to maximize diversity in these lists. Note that unlike the purely source-side model, we do enforce local coherence on the target side, but we do not propagate information across the entire document. 
+
+\subsection{(Randomized) beam search}
+If we want to maintain fully document-level context on the target side, the proposed Viterbi algorithm no longer applies. We can instead take a (randomized) beam search approach. Consider a set of document-level hypotheses, where each hypothesis is represented by a tuple $\tuple{\vh^{(k)}_i, \psi^{(k)}_i}$. We can then step forward as,
+\begin{align}
+\tuple{\vh^{(k)}_i, \psi^{(k)}_i} = & 
+\bigoplus_q \tuple{\vh^{(\ell)}_{i-1}, \psi^{(\ell)}_{i-1}
++ \log P(\vw_i^{(k)} \mid \vh_{i-1}^{(\ell)})}\\
+q^{(k)}_i \propto & \exp (\psi^{(k)}_i),
+\end{align}
+with $\bigoplus_q$ serving as a general notation, which could indicate a max operation, random sampling, or perhaps even some kind of weighted average.
 
 \bibliographystyle{acl}
 \bibliography{bib}
